@@ -7,19 +7,12 @@ import morgan from 'morgan';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { config } from './config';
 import { authMiddleware } from './authentication/auth';
-import path from 'path';
-import fs from 'fs';
 
 const app = express();
 const server = http.createServer(app);
-const logsDir = path.join(__dirname, '..', 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
 
-const accessLogStream = fs.createWriteStream(path.join(logsDir, 'access.log'), { flags: 'a' });
-
-app.use(morgan('combined', { stream: accessLogStream }));
+app.use(morgan('combined'));
+//app.use(morgan('combined', { stream: accessLogStream }));
 app.use(cors({ origin: config.allowedOrigin, credentials: true }));
 app.use(rateLimit({ windowMs: 60_000, max: 600, standardHeaders: true }));
 
