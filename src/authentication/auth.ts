@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as admin from 'firebase-admin';
-import { config } from '../config';
+import { config } from '../config/config';
 
 let firebaseApp: admin.app.App | null = null;
 
