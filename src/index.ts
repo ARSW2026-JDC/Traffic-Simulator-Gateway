@@ -5,7 +5,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { config } from './config';
+import { config } from './config/config';
 import { authMiddleware } from './authentication/auth';
 
 const app = express();
