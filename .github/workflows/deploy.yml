@@ -49,7 +49,7 @@ jobs:
             # instalar solo prod deps (más rápido)
             npm ci --omit=dev
 
-            # reiniciar app
-            pm2 restart gateway || pm2 start dist/index.js --name gateway
-
+            # reiniciar app desde 0
+            pm2 delete gateway || true
+            pm2 start dist/main.js --name gateway
             pm2 save
