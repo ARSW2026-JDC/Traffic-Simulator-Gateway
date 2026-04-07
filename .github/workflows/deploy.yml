@@ -51,7 +51,7 @@ jobs:
 
             # reiniciar app desde 0
             pm2 delete gateway || true
-            pm2 start dist/main.js --name gateway  --cwd /home/ubuntu/gateway
+            pm2 start dist/index.js --name gateway  --cwd /home/ubuntu/gateway
             pm2 save
 
             sleep 3
