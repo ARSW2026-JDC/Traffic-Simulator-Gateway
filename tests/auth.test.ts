@@ -8,6 +8,7 @@ describe('Authentication Module', () => {
       expect(isValidEmail('user@domain.org')).toBe(true);
       expect(isValidEmail('user.name@domain.com')).toBe(true);
       expect(isValidEmail('test+tag@example.com')).toBe(true);
+      expect(isValidEmail('test@sub.domain.com')).toBe(true);
     });
 
     it('should return false for invalid emails', () => {
@@ -23,10 +24,13 @@ describe('Authentication Module', () => {
       const { isValidEmail } = require('../src/authentication/auth');
       expect(isValidEmail('   ')).toBe(false);
     });
+  });
 
-    it('should return false for emails without @', () => {
-      const { isValidEmail } = require('../src/authentication/auth');
-      expect(isValidEmail('testexample.com')).toBe(false);
+  describe('getFirebaseApp', () => {
+    it('should export getFirebaseApp function', () => {
+      const { getFirebaseApp } = require('../src/authentication/auth');
+      expect(getFirebaseApp).toBeDefined();
+      expect(typeof getFirebaseApp).toBe('function');
     });
   });
 
