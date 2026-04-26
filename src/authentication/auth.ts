@@ -13,7 +13,7 @@ const isFirebaseConfigured = !!(
  * Initialize Firebase Admin SDK lazily
  * Only initializes if credentials are fully configured
  */
-function getFirebaseApp(): admin.app.App | null {
+export function getFirebaseApp(): admin.app.App | null {
   if (firebaseApp) return firebaseApp;
   if (!isFirebaseConfigured) {
     return null;
@@ -41,7 +41,7 @@ function getFirebaseApp(): admin.app.App | null {
 /**
  * Validates email is present and well-formed
  */
-function isValidEmail(email: unknown): email is string {
+export function isValidEmail(email: unknown): email is string {
   return typeof email === 'string' && email.trim().length > 0 && email.includes('@');
 }
 

@@ -1,27 +1,40 @@
-import * as fs from 'node:fs';
 import { describe, it, expect } from '@jest/globals';
 
-describe('Auth Middleware', () => {
+describe('Authentication Module', () => {
+  describe('isValidEmail', () => {
+    it('should return true for valid emails', () => {
+      const { isValidEmail } = require('../src/authentication/auth');
+      expect(isValidEmail('test@example.com')).toBe(true);
+      expect(isValidEmail('user@domain.org')).toBe(true);
+      expect(isValidEmail('user.name@domain.com')).toBe(true);
+      expect(isValidEmail('test+tag@example.com')).toBe(true);
+    });
+
+    it('should return false for invalid emails', () => {
+      const { isValidEmail } = require('../src/authentication/auth');
+      expect(isValidEmail('')).toBe(false);
+      expect(isValidEmail('notanemail')).toBe(false);
+      expect(isValidEmail(null as any)).toBe(false);
+      expect(isValidEmail(undefined as any)).toBe(false);
+      expect(isValidEmail(123 as any)).toBe(false);
+    });
+
+    it('should return false for whitespace-only strings', () => {
+      const { isValidEmail } = require('../src/authentication/auth');
+      expect(isValidEmail('   ')).toBe(false);
+    });
+
+    it('should return false for emails without @', () => {
+      const { isValidEmail } = require('../src/authentication/auth');
+      expect(isValidEmail('testexample.com')).toBe(false);
+    });
+  });
+
   describe('authMiddleware', () => {
-    it('should export authMiddleware function', async () => {
-      const { authMiddleware } = await import('../src/authentication/auth');
+    it('should export authMiddleware function', () => {
+      const { authMiddleware } = require('../src/authentication/auth');
       expect(authMiddleware).toBeDefined();
       expect(typeof authMiddleware).toBe('function');
     });
-  });
-});
-
-describe('Auth Source Files', () => {
-  it('should have auth.ts file', () => {
-    expect(fs.existsSync('src/authentication/auth.ts')).toBe(true);
-  });
-
-  it('should not have code duplication in auth.ts', () => {
-    const content = fs.readFileSync('src/authentication/auth.ts', 'utf-8');
-    
-    // Check for main functions
-    expect(content).toContain('authMiddleware');
-    expect(content).toContain('getFirebaseApp');
-    expect(content).toContain('isValidEmail');
   });
 });

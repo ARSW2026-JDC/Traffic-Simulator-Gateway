@@ -11,7 +11,6 @@ import {
   createNrtProxy,
   createSimProxy,
 } from './middleware/proxy';
-import { metricsMiddleware, register } from './monitoring/metrics';
 
 const app = express();
 const server = http.createServer(app);
@@ -19,9 +18,6 @@ const server = http.createServer(app);
 // MIDDLEWARE STACK
 
 app.use(morgan('combined'));
-
-// Metrics collection middleware
-app.use(metricsMiddleware);
 
 // CORS: Only allow requests from configured origin
 app.use(
@@ -154,7 +150,7 @@ const checkSimulationHealth = async (): Promise<string> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${config.simulationUrl}/health`, {
+    const response = await fetch(`${config.simulationUrl}/sim/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -197,16 +193,6 @@ app.get('/health', (_req, res) => {
       lastCheck: healthStatus.lastCheck,
     },
   });
-});
-
-// // Prometheus metrics endpoint
-app.get('/metrics', async (_req, res) => {
-  try {
-    res.set('Content-Type', register.contentType);
-    res.end(await register.metrics());
-  } catch (err) {
-    res.status(500).end(err instanceof Error ? err.message : 'Metrics error');
-  }
 });
 
 // WEBSOCKET UPGRADE HANDLING
