@@ -11,8 +11,8 @@ import {
   createNrtProxy,
   createSimProxy,
 } from './middleware/proxy';
-// import { metricsMiddleware, register } from './monitoring/metrics';
-// import { logger } from './monitoring/logging';
+import { metricsMiddleware, register } from './monitoring/metrics';
+import { logger } from './monitoring/logging';
 
 const app = express();
 const server = http.createServer(app);
@@ -22,7 +22,7 @@ const server = http.createServer(app);
 app.use(morgan('combined'));
 
 // Metrics collection middleware
-// app.use(metricsMiddleware);
+app.use(metricsMiddleware);
 
 // CORS: Only allow requests from configured origin
 app.use(
@@ -201,14 +201,14 @@ app.get('/health', (_req, res) => {
 });
 
 // // Prometheus metrics endpoint
-// app.get('/metrics', async (_req, res) => {
-//   try {
-//     res.set('Content-Type', register.contentType);
-//     res.end(await register.metrics());
-//   } catch (err) {
-//     res.status(500).end(err instanceof Error ? err.message : 'Metrics error');
-//   }
-// });
+app.get('/metrics', async (_req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err instanceof Error ? err.message : 'Metrics error');
+  }
+});
 
 // WEBSOCKET UPGRADE HANDLING
 

@@ -9,8 +9,8 @@ describe('Integration Tests', () => {
         await import('../src/config/config');
         await import('../src/authentication/auth');
         await import('../src/middleware/proxy');
-        // await import('../src/monitoring/metrics');
-        // await import('../src/monitoring/logging');
+        await import('../src/monitoring/metrics');
+        await import('../src/monitoring/logging');
       } catch {
         success = false;
       }
@@ -18,16 +18,16 @@ describe('Integration Tests', () => {
     });
   });
 
-  // describe('Module Structure', () => {
-  //   it('should have monitoring modules', () => {
-  //     expect(fs.existsSync('src/monitoring/metrics.ts')).toBe(true);
-  //     expect(fs.existsSync('src/monitoring/logging.ts')).toBe(true);
-  //   });
+  describe('Module Structure', () => {
+    it('should have monitoring modules', () => {
+      expect(fs.existsSync('src/monitoring/metrics.ts')).toBe(true);
+      expect(fs.existsSync('src/monitoring/logging.ts')).toBe(true);
+    });
 
-  //   it('should have proxy middleware', () => {
-  //     expect(fs.existsSync('src/middleware/proxy.ts')).toBe(true);
-  //   });
-  // });
+    it('should have proxy middleware', () => {
+      expect(fs.existsSync('src/middleware/proxy.ts')).toBe(true);
+    });
+  });
 
   describe('Configuration', () => {
     it('should have valid .env.example', () => {
