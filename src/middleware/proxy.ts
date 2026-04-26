@@ -68,8 +68,10 @@ export function createApiProxy() {
     target: config.backendUrl,
     timeout: 60_000,
     proxyTimeout: 60_000,
-    onError: createErrorHandler('API'),
-  } as any);
+    on: {
+      error: createErrorHandler('API'),
+    },
+  });
 }
 
 /**
@@ -83,8 +85,10 @@ export function createNrtProxy() {
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/nrt': '' },
-    onError: createErrorHandler('Chat'),
-  } as any);
+    on: {
+      error: createErrorHandler('Chat'),
+    },
+  });
 }
 
 /**
@@ -98,6 +102,8 @@ export function createSimProxy() {
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
-    onError: createErrorHandler('Simulation'),
-  } as any);
+    on: {
+      error: createErrorHandler('Simulation'),
+    },
+  });
 }
