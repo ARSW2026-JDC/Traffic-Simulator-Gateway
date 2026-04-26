@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { describe, it, expect } from '@jest/globals';
 
 describe('Integration Tests', () => {
   describe('Gateway Imports', () => {
