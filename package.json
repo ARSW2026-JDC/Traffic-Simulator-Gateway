@@ -17,7 +17,7 @@
     "firebase-admin": "^13.8.0",
     "http-proxy-middleware": "^3.0.5",
     "morgan": "^1.10.0",
-    "pino": "^9.0.0",
+    "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "prom-client": "^15.1.0",
     "swagger-jsdoc": "^6.2.8",
