@@ -25,6 +25,16 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92
+        with:
+          args: >
+            -Dsonar.projectKey=ARSW2026-JDC_Traffic-Simulator-Gateway
+            -Dsonar.organization=arsw2026-jdc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       - name: Build
         run: npm run build
 
