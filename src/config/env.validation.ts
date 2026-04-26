@@ -19,7 +19,7 @@ export interface ValidatedEnv {
 /**
  * Validates a URL string format
  */
-function validateUrl(url: string, fieldName: string): void {
+export function validateUrl(url: string, fieldName: string): void {
   try {
     new URL(url);
   } catch {
@@ -30,7 +30,7 @@ function validateUrl(url: string, fieldName: string): void {
 /**
  * Validates a port number
  */
-function validatePort(port: number, fieldName: string): void {
+export function validatePort(port: number, fieldName: string): void {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid port for ${fieldName}: ${port}. Must be an integer between 1 and 65535.`);
   }
@@ -39,7 +39,7 @@ function validatePort(port: number, fieldName: string): void {
 /**
  * Validates Firebase Private Key format
  */
-function validateFirebasePrivateKey(key: string): void {
+export function validateFirebasePrivateKey(key: string): void {
   if (!key.includes('BEGIN PRIVATE KEY') || !key.includes('END PRIVATE KEY')) {
     throw new Error('Invalid FIREBASE_PRIVATE_KEY: Must contain BEGIN and END markers.');
   }
