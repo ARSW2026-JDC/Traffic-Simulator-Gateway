@@ -1,5 +1,5 @@
 import { createApiProxy, createNrtProxy, createSimProxy } from '../src/middleware/proxy';
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 
 describe('Proxy Middleware', () => {
   describe('createApiProxy', () => {
