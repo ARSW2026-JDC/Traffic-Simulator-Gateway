@@ -25,6 +25,44 @@ describe('Proxy Middleware', () => {
       expect(typeof proxy).toBe('function');
     });
   });
+
+  describe('createErrorHandler', () => {
+    it('should return 503 for ECONNREFUSED errors', () => {
+      const { createApiProxy } = require('../src/middleware/proxy');
+      const proxy = createApiProxy();
+      
+      const mockReq = { method: 'GET', url: '/api/test' };
+      const mockRes = {
+        writeHead: jest.fn(),
+        end: jest.fn(),
+      };
+      const mockErr = { code: 'ECONNREFUSED', message: 'Connection refused' };
+      
+      const onError = (proxy as any).options?.onError;
+      if (onError) {
+        onError(mockErr, mockReq, mockRes);
+        expect(mockRes.writeHead).toHaveBeenCalledWith(503, { 'Content-Type': 'application/json' });
+      }
+    });
+
+    it('should return 502 for other errors', () => {
+      const { createApiProxy } = require('../src/middleware/proxy');
+      const proxy = createApiProxy();
+      
+      const mockReq = { method: 'GET', url: '/api/test' };
+      const mockRes = {
+        writeHead: jest.fn(),
+        end: jest.fn(),
+      };
+      const mockErr = { code: 'ETIMEDOUT', message: 'Timeout' };
+      
+      const onError = (proxy as any).options?.onError;
+      if (onError) {
+        onError(mockErr, mockReq, mockRes);
+        expect(mockRes.writeHead).toHaveBeenCalledWith(502, { 'Content-Type': 'application/json' });
+      }
+    });
+  });
 });
 
 describe('Proxy Module Exports', () => {
