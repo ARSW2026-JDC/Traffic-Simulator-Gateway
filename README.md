@@ -26,7 +26,7 @@ Proxy inverso y router central para la aplicación CUTS. Maneja autenticación, 
 npm install
 ```
 
-## ▶Ejecución
+## Ejecución
 
 ```bash
 # Desarrollo
@@ -43,18 +43,6 @@ npm test
 npm run test:coverage
 ```
 
-## Variables de Entorno
-
-| Variable | Descripción | Default |
-|----------|-------------|---------|
-| `PORT` | Puerto del Gateway | `3000` |
-| `BACKEND_URL` | URL del Backend | `http://localhost:4000` |
-| `SIMULATION_URL` | URL del Simulation Server | `http://localhost:5000` |
-| `ALLOWED_ORIGIN` | Origen CORS permitido | `http://localhost:5173` |
-| `FIREBASE_PROJECT_ID` | Firebase Project ID | - |
-| `FIREBASE_PRIVATE_KEY` | Firebase Private Key | - |
-| `FIREBASE_CLIENT_EMAIL` | Firebase Client Email | - |
-
 ## Rutas
 
 | Ruta | Destino |
@@ -70,3 +58,32 @@ npm run test:coverage
 - **API**: 300 req/min
 - **NRT** (chat): 50 req/min
 - **Sim** (simulación): 100 req/min
+
+## Monitoreo
+
+### Endpoints de Monitoreo
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `/health` | Health check con estado de servicios |
+| `/metrics` | Métricas en formato Prometheus |
+
+### Métricas Disponibles
+
+- `gateway_http_requests_total` - Total de requests HTTP
+- `gateway_http_request_duration_seconds` - Duración de requests
+- `gateway_websocket_connections` - Conexiones WebSocket activas
+- `gateway_proxy_errors_total` - Errores de proxy
+- `gateway_rate_limit_exceeded_total` - Rate limits excedidos
+
+### integraciones
+
+- **Prometheus**: Scraping en `http://localhost:3000/metrics`
+- **Loki** (opcional): Logs en `http://localhost:3100`
+
+## Seguridad
+
+- Validación estricta de variables de entorno
+- Autenticación Firebase obligatoria en producción
+- Rate limiting por ruta
+- `xfwd: false` para evitar IP forwarding inseguro
