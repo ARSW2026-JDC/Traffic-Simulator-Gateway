@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
+        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92
         with:
           args: >
             -Dsonar.projectKey=ARSW2026-JDC_Traffic-Simulator-Gateway
