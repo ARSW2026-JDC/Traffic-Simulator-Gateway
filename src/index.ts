@@ -17,9 +17,7 @@ import {
 const app = express();
 const server = http.createServer(app);
 
-// ─────────────────────────────────────────────────────────────────────
 // MIDDLEWARE STACK
-// ─────────────────────────────────────────────────────────────────────
 
 app.use(morgan('combined'));
 
@@ -34,9 +32,7 @@ app.use(
   }),
 );
 
-// ─────────────────────────────────────────────────────────────────────
 // RATE LIMITING (Per-route configuration)
-// ─────────────────────────────────────────────────────────────────────
 
 /**
  * API rate limiter: 300 requests per minute
@@ -46,9 +42,8 @@ app.use(
 const apiLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000, // 1 minute
   max: 300, // 300 requests per window
-  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  standardHeaders: true,
   skip: (req) => {
-    // Log rate limit hits for monitoring
     return false;
   },
   handler: (req, res) => {
@@ -74,8 +69,6 @@ const nrtLimiter: RateLimitRequestHandler = rateLimit({
   max: 50,
   standardHeaders: true,
   skip: (req) => {
-    // WebSocket upgrades don't count against rate limit
-    // (only initial connection requests)
     return req.method === 'GET' && req.get('upgrade') === 'websocket';
   },
   handler: (req, res) => {
@@ -100,7 +93,6 @@ const simLimiter: RateLimitRequestHandler = rateLimit({
   max: 100,
   standardHeaders: true,
   skip: (req) => {
-    // WebSocket upgrades don't count against rate limit
     return req.method === 'GET' && req.get('upgrade') === 'websocket';
   },
   handler: (req, res) => {
@@ -116,17 +108,13 @@ const simLimiter: RateLimitRequestHandler = rateLimit({
   },
 });
 
-// ─────────────────────────────────────────────────────────────────────
 // PROXY MIDDLEWARE (with timeouts and error handling)
-// ─────────────────────────────────────────────────────────────────────
 
 const apiProxy = createApiProxy();
 const nrtProxy = createNrtProxy();
 const simProxy = createSimProxy();
 
-// ─────────────────────────────────────────────────────────────────────
 // ROUTES
-// ─────────────────────────────────────────────────────────────────────
 
 // API route: /api → Backend (with authentication and rate limiting)
 app.use('/api', apiLimiter, authMiddleware, apiProxy);
@@ -137,9 +125,7 @@ app.use('/nrt', nrtLimiter, nrtProxy);
 // SIM route: /sim → Simulation Server (WebSocket, with rate limiting)
 app.use('/sim', simLimiter, simProxy);
 
-// ─────────────────────────────────────────────────────────────────────
 // HEALTH CHECKS
-// ─────────────────────────────────────────────────────────────────────
 
 const healthStatus = {
   gateway: 'ok',
@@ -224,9 +210,7 @@ app.get('/health', (_req, res) => {
 //   }
 // });
 
-// ─────────────────────────────────────────────────────────────────────
 // WEBSOCKET UPGRADE HANDLING
-// ─────────────────────────────────────────────────────────────────────
 
 server.on('upgrade', (req, socket, head) => {
   const url = req.url ?? '';
@@ -246,9 +230,7 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────
 // SERVER STARTUP
-// ─────────────────────────────────────────────────────────────────────
 
 server.listen(config.port, () => {
   console.info(`
