@@ -11,6 +11,7 @@
 
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import http from 'http';
+import { IncomingMessage, ServerResponse } from 'http';
 import { config } from '../config/config';
 
 /**
@@ -20,123 +21,83 @@ import { config } from '../config/config';
 const createHttpAgent = () =>
   new http.Agent({
     keepAlive: true,
-    keepAliveMsecs: 30_000, // 30 seconds
-    maxSockets: 256, // Max concurrent sockets
-    maxFreeSockets: 64, // Max free sockets to keep
-    timeout: 60_000, // Socket timeout
+    keepAliveMsecs: 30_000,
+    maxSockets: 256,
+    maxFreeSockets: 64,
+    timeout: 60_000,
   });
+
+/**
+ * Handles proxy errors uniformly
+ */
+const createErrorHandler = (proxyName: string) => {
+  return (err: Error, req: IncomingMessage, res: ServerResponse) => {
+    const statusCode = (err as any).code === 'ECONNREFUSED' ? 503 : 502;
+    console.error(`[${proxyName}] Error:`, {
+      message: err.message,
+      code: (err as any).code,
+      method: req.method,
+      url: req.url,
+    });
+
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        error: 'Service unavailable',
+        message: `The ${proxyName} service is not responding.`,
+      }),
+    );
+  };
+};
 
 /**
  * Base proxy configuration shared across all proxies
  */
 const baseProxyOptions: Partial<Options> = {
   changeOrigin: true,
-  xfwd: true, // Add X-Forwarded-* headers
-  agent: createHttpAgent(), // Connection keep-alive
+  xfwd: false,
+  agent: createHttpAgent(),
 };
 
 /**
  * Creates HTTP proxy to Backend API (/api route)
- * - No WebSocket support
- * - 60 second request timeout
- * - Auth middleware applied separately
  */
 export function createApiProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.backendUrl,
-    timeout: 60_000, // 60 seconds
-    proxyTimeout: 60_000, // 60 seconds
-    onError: (err, req, res) => {
-      console.error('[api-proxy] Error:', {
-        message: err.message,
-        code: (err as any).code,
-        method: req.method,
-        url: req.url,
-      });
-
-      // Return 502 Bad Gateway for upstream errors
-      res.writeHead(502, {
-        'Content-Type': 'application/json',
-      });
-      res.end(
-        JSON.stringify({
-          error: 'Backend service unavailable',
-          message: 'The API server is not responding. Please try again later.',
-        }),
-      );
-    },
+    timeout: 60_000,
+    proxyTimeout: 60_000,
+    onError: createErrorHandler('API'),
   });
 }
 
 /**
- * Creates WebSocket proxy to Backend NRT (Near Real-Time) (/nrt route)
- * - WebSocket support enabled
- * - 10 minute WebSocket timeout (keeps connections alive longer)
- * - Used for chat and real-time notifications
+ * Creates WebSocket proxy to Backend NRT (/nrt route)
  */
 export function createNrtProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.backendUrl,
     ws: true,
-    timeout: 600_000, // 10 minutes
-    proxyTimeout: 600_000, // 10 minutes
+    timeout: 600_000,
+    proxyTimeout: 600_000,
     pathRewrite: { '^/nrt': '' },
-    onError: (err, req, res) => {
-      console.error('[nrt-proxy] Error:', {
-        message: err.message,
-        code: (err as any).code,
-        method: req.method,
-        url: req.url,
-      });
-
-      // Return 502 Bad Gateway for upstream errors
-      res.writeHead(502, {
-        'Content-Type': 'application/json',
-      });
-      res.end(
-        JSON.stringify({
-          error: 'WebSocket service unavailable',
-          message: 'Connection to chat service failed. Please reconnect.',
-        }),
-      );
-    },
+    onError: createErrorHandler('Chat'),
   });
 }
 
 /**
  * Creates WebSocket proxy to Simulation Server (/sim route)
- * - WebSocket support enabled
- * - 10 minute WebSocket timeout
- * - Used for simulation engine communication
  */
 export function createSimProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.simulationUrl,
     ws: true,
-    timeout: 600_000, // 10 minutes
-    proxyTimeout: 600_000, // 10 minutes
+    timeout: 600_000,
+    proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
-    onError: (err, req, res) => {
-      console.error('[sim-proxy] Error:', {
-        message: err.message,
-        code: (err as any).code,
-        method: req.method,
-        url: req.url,
-      });
-
-      // Return 502 Bad Gateway for upstream errors
-      res.writeHead(502, {
-        'Content-Type': 'application/json',
-      });
-      res.end(
-        JSON.stringify({
-          error: 'Simulation service unavailable',
-          message: 'Connection to simulation server failed. Please try again later.',
-        }),
-      );
-    },
+    onError: createErrorHandler('Simulation'),
   });
 }
