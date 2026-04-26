@@ -161,14 +161,14 @@ export const authLogger = {
 
 export const healthLogger = {
   check: (service: string, status: 'ok' | 'unavailable' | 'error') => {
-    if (status !== 'ok') {
-      logger.warn({
-        msg: 'Health check failed',
+    if (status === 'ok') {
+      logger.debug({
+        msg: 'Health check passed',
         health: { service, status },
       });
     } else {
-      logger.debug({
-        msg: 'Health check passed',
+      logger.warn({
+        msg: 'Health check failed',
         health: { service, status },
       });
     }

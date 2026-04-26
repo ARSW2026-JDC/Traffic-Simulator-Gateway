@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { describe, it, expect } from '@jest/globals';
 
 describe('Environment Validation', () => {
@@ -12,15 +12,8 @@ describe('Environment Validation', () => {
 
   describe('config module', () => {
     it('should export config object', async () => {
-      // Just verify config can be imported without throwing
-      await expect(async () => {
-        try {
-          const { config } = await import('../src/config/config');
-          return config;
-        } catch {
-          return null;
-        }
-      }).not.toThrow();
+      const { config } = await import('../src/config/config');
+      expect(config).toBeDefined();
     });
   });
 });

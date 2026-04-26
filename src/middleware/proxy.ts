@@ -10,8 +10,8 @@
  */
 
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
-import http from 'http';
-import { IncomingMessage, ServerResponse } from 'http';
+import nodeHttp from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from '../config/config';
 
 /**
@@ -19,7 +19,7 @@ import { config } from '../config/config';
  * Reuses connections to reduce latency
  */
 const createHttpAgent = () =>
-  new http.Agent({
+  new nodeHttp.Agent({
     keepAlive: true,
     keepAliveMsecs: 30_000,
     maxSockets: 256,

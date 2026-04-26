@@ -12,7 +12,6 @@ import {
   createSimProxy,
 } from './middleware/proxy';
 import { metricsMiddleware, register } from './monitoring/metrics';
-import { logger } from './monitoring/logging';
 
 const app = express();
 const server = http.createServer(app);
