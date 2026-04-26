@@ -69,7 +69,7 @@ export function createApiProxy() {
     timeout: 60_000,
     proxyTimeout: 60_000,
     onError: createErrorHandler('API'),
-  });
+  } as any);
 }
 
 /**
@@ -84,7 +84,7 @@ export function createNrtProxy() {
     proxyTimeout: 600_000,
     pathRewrite: { '^/nrt': '' },
     onError: createErrorHandler('Chat'),
-  });
+  } as any);
 }
 
 /**
@@ -99,5 +99,5 @@ export function createSimProxy() {
     proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
     onError: createErrorHandler('Simulation'),
-  });
+  } as any);
 }
