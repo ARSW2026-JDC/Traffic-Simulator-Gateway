@@ -9,6 +9,12 @@ const isFirebaseConfigured = !!(
   config.firebasePrivateKey
 );
 
+const GUEST_PATHS = ['/auth/verify'];
+
+export function isGuestPath(path: string): boolean {
+  return GUEST_PATHS.some(guestPath => path.includes(guestPath));
+}
+
 /**
  * Initialize Firebase Admin SDK lazily
  * Only initializes if credentials are fully configured
@@ -56,6 +62,9 @@ export function isValidEmail(email: unknown): email is string {
  * Headers added to request:
  * - x-user-id: Firebase UID
  * - x-user-email: Firebase email (validated)
+ * 
+ * Guest paths (allow null email):
+ * - /auth/verify (for anonymous Firebase login)
  */
 export async function authMiddleware(
   req: Request,
@@ -93,11 +102,18 @@ export async function authMiddleware(
     const token = authHeader.slice(7); // Remove "Bearer " prefix
     const decoded = await admin.auth(app).verifyIdToken(token);
 
-    // Validate email is present and valid
+    // Check if this is a guest path (allows null email)
+    const isGuestAllowedPath = isGuestPath(req.path);
+
+    // Validate email is present and valid (except for guest paths)
     if (!isValidEmail(decoded.email)) {
-      console.warn(
-        `Token missing valid email. UID: ${decoded.uid}. Email: ${decoded.email}`,
-      );
+      if (isGuestAllowedPath) {
+        // Guest path: allow null email (anonymous Firebase users)
+        req.headers['x-user-id'] = decoded.uid;
+        req.headers['x-user-email'] = '';
+        next();
+        return;
+      }
       res.status(401).json({
         error: 'Invalid token: missing email claim',
       });
@@ -111,7 +127,7 @@ export async function authMiddleware(
     next();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Token verification failed: ${errorMessage}`);
+    console.error('Token verification failed:', errorMessage);
 
     // Determine error type and return appropriate status
     if (
@@ -132,4 +148,3 @@ export async function authMiddleware(
     }
   }
 }
-
