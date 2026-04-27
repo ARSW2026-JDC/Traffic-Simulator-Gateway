@@ -11,7 +11,7 @@ const isFirebaseConfigured = !!(
 
 const GUEST_PATHS = ['/auth/verify'];
 
-function isGuestPath(path: string): boolean {
+export function isGuestPath(path: string): boolean {
   return GUEST_PATHS.some(guestPath => path.includes(guestPath));
 }
 
