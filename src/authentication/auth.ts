@@ -9,6 +9,15 @@ const isFirebaseConfigured = !!(
   config.firebasePrivateKey
 );
 
+const GUEST_PATHS = ['/auth/verify'];
+
+function isGuestPath(path: string): boolean {
+  console.log(`[Auth] Checking path: "${path}" against guest paths:`, GUEST_PATHS);
+  const result = GUEST_PATHS.some(guestPath => path.includes(guestPath));
+  console.log(`[Auth] isGuestPath result: ${result}`);
+  return result;
+}
+
 /**
  * Initialize Firebase Admin SDK lazily
  * Only initializes if credentials are fully configured
@@ -56,6 +65,9 @@ export function isValidEmail(email: unknown): email is string {
  * Headers added to request:
  * - x-user-id: Firebase UID
  * - x-user-email: Firebase email (validated)
+ * 
+ * Guest paths (allow null email):
+ * - /auth/verify (for anonymous Firebase login)
  */
 export async function authMiddleware(
   req: Request,
@@ -93,8 +105,21 @@ export async function authMiddleware(
     const token = authHeader.slice(7); // Remove "Bearer " prefix
     const decoded = await admin.auth(app).verifyIdToken(token);
 
-    // Validate email is present and valid
+    // Check if this is a guest path (allows null email)
+    console.log(`[Auth] Full path: "${req.path}"`);
+    const isGuestAllowedPath = isGuestPath(req.path);
+    console.log(`[Auth] decoded email: ${decoded.email}, isValidEmail: ${isValidEmail(decoded.email)}`);
+    console.log(`[Auth] isGuestAllowedPath: ${isGuestAllowedPath}`);
+
+    // Validate email is present and valid (except for guest paths)
     if (!isValidEmail(decoded.email)) {
+      if (isGuestAllowedPath) {
+        // Guest path: allow null email (anonymous Firebase users)
+        req.headers['x-user-id'] = decoded.uid;
+        req.headers['x-user-email'] = '';
+        next();
+        return;
+      }
       console.warn(
         `Token missing valid email. UID: ${decoded.uid}. Email: ${decoded.email}`,
       );
@@ -132,4 +157,3 @@ export async function authMiddleware(
     }
   }
 }
-
