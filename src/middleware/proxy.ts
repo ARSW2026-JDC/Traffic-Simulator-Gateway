@@ -31,22 +31,55 @@ const createHttpAgent = () =>
  * Handles proxy errors uniformly
  */
 const createErrorHandler = (proxyName: string) => {
-  return (err: Error, req: IncomingMessage, res: ServerResponse) => {
-    const statusCode = (err as any).code === 'ECONNREFUSED' ? 503 : 502;
+  return (err: Error, req: IncomingMessage, res: any) => {
+    const code = (err as any).code;
+    const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
     console.error(`[${proxyName}] Error:`, {
       message: err.message,
-      code: (err as any).code,
-      method: req.method,
-      url: req.url,
+      code,
+      method: req?.method,
+      url: req?.url,
     });
 
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        error: 'Service unavailable',
-        message: `The ${proxyName} service is not responding.`,
-      }),
-    );
+    const payload = JSON.stringify({
+      error: 'Service unavailable',
+      message: `The ${proxyName} service is not responding.`,
+    });
+
+    // If res is a normal HTTP ServerResponse
+    if (res && typeof res.writeHead === 'function') {
+      try {
+        if ((res as ServerResponse).writableEnded) return;
+        (res as ServerResponse).writeHead(statusCode, { 'Content-Type': 'application/json' });
+        (res as ServerResponse).end(payload);
+      } catch (writeErr) {
+        // Best-effort: destroy if unable to write
+        try {
+          res.destroy && res.destroy();
+        } catch {}
+      }
+      return;
+    }
+
+    // If res is a raw socket (upgrade / websocket path) - try best-effort minimal HTTP response
+    try {
+      if (res && typeof res.write === 'function') {
+        const statusText = require('http').STATUS_CODES[statusCode] || 'Error';
+        const header = `HTTP/1.1 ${statusCode} ${statusText}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload)}\r\nConnection: close\r\n\r\n`;
+        res.write(header + payload);
+        res.end && res.end();
+        return;
+      }
+
+      // Fallback: destroy underlying request socket if present
+      if (req && req.socket && typeof req.socket.destroy === 'function') {
+        req.socket.destroy();
+      }
+    } catch (socketErr) {
+      try {
+        res && res.destroy && res.destroy();
+      } catch {}
+    }
   };
 };
 
