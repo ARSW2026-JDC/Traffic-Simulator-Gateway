@@ -12,10 +12,7 @@ const isFirebaseConfigured = !!(
 const GUEST_PATHS = ['/auth/verify'];
 
 function isGuestPath(path: string): boolean {
-  console.log(`[Auth] Checking path: "${path}" against guest paths:`, GUEST_PATHS);
-  const result = GUEST_PATHS.some(guestPath => path.includes(guestPath));
-  console.log(`[Auth] isGuestPath result: ${result}`);
-  return result;
+  return GUEST_PATHS.some(guestPath => path.includes(guestPath));
 }
 
 /**
@@ -106,10 +103,7 @@ export async function authMiddleware(
     const decoded = await admin.auth(app).verifyIdToken(token);
 
     // Check if this is a guest path (allows null email)
-    console.log(`[Auth] Full path: "${req.path}"`);
     const isGuestAllowedPath = isGuestPath(req.path);
-    console.log(`[Auth] decoded email: ${decoded.email}, isValidEmail: ${isValidEmail(decoded.email)}`);
-    console.log(`[Auth] isGuestAllowedPath: ${isGuestAllowedPath}`);
 
     // Validate email is present and valid (except for guest paths)
     if (!isValidEmail(decoded.email)) {
@@ -120,9 +114,6 @@ export async function authMiddleware(
         next();
         return;
       }
-      console.warn(
-        `Token missing valid email. UID: ${decoded.uid}. Email: ${decoded.email}`,
-      );
       res.status(401).json({
         error: 'Invalid token: missing email claim',
       });
@@ -136,7 +127,7 @@ export async function authMiddleware(
     next();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Token verification failed: ${errorMessage}`);
+    console.error('Token verification failed:', errorMessage);
 
     // Determine error type and return appropriate status
     if (
