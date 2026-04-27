@@ -10,22 +10,24 @@
  */
 
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
-import nodeHttp from 'node:http';
+import http from 'node:http';
+import https from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from '../config/config';
 
 /**
- * HTTP Agent with connection keep-alive
+ * HTTP and HTTPS Agents with connection keep-alive
  * Reuses connections to reduce latency
  */
-const createHttpAgent = () =>
-  new nodeHttp.Agent({
-    keepAlive: true,
-    keepAliveMsecs: 30_000,
-    maxSockets: 256,
-    maxFreeSockets: 64,
-    timeout: 60_000,
-  });
+const agentSettings = {
+  keepAlive: true,
+  keepAliveIntervalMs: 30000,
+  maxSockets: 256,
+  maxFreeSockets: 64,
+  requestTimeoutMs: 60000,
+};
+const httpAgent = new http.Agent(agentSettings);
+const httpsAgent = new https.Agent(agentSettings);
 
 /**
  * Handles proxy errors uniformly
@@ -89,7 +91,8 @@ const createErrorHandler = (proxyName: string) => {
 const baseProxyOptions: Partial<Options> = {
   changeOrigin: true,
   xfwd: false,
-  agent: createHttpAgent(),
+  agent: (req: any) =>
+  req?.protocol === 'https:' ? httpsAgent : httpAgent,
 };
 
 /**
