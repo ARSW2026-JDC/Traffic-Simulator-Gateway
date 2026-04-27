@@ -21,7 +21,7 @@ import { config } from '../config/config';
  */
 const agentSettings = {
   keepAlive: true,
-  keepAliveIntervalMs: 30000,
+  keepAliveMsecs: 30000,
   maxSockets: 256,
   maxFreeSockets: 64,
   requestTimeoutMs: 60000,
@@ -29,6 +29,14 @@ const agentSettings = {
 const httpAgent = new http.Agent(agentSettings);
 const httpsAgent = new https.Agent(agentSettings);
 
+/**
+ * Helper function to get the appropriate agent based on the target URL protocol
+ */
+function getAgent(target: string) {
+  return target.startsWith('https')
+    ? httpsAgent
+    : httpAgent;
+}
 /**
  * Handles proxy errors uniformly
  */
@@ -91,8 +99,6 @@ const createErrorHandler = (proxyName: string) => {
 const baseProxyOptions: Partial<Options> = {
   changeOrigin: true,
   xfwd: false,
-  agent: (req: any) =>
-  req?.protocol === 'https:' ? httpsAgent : httpAgent,
 };
 
 /**
@@ -102,6 +108,7 @@ export function createApiProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.backendUrl,
+    agent: getAgent(config.backendUrl),
     timeout: 60_000,
     proxyTimeout: 60_000,
     on: {
@@ -117,6 +124,7 @@ export function createNrtProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.backendUrl,
+    agent: getAgent(config.backendUrl),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
@@ -134,6 +142,7 @@ export function createSimProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.simulationUrl,
+    agent: getAgent(config.backendUrl),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
