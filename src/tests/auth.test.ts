@@ -1,122 +1,63 @@
 import { isValidEmail, isGuestPath } from '../authentication/auth';
 
+const validEmails = [
+  'test@example.com',
+  'user.name@domain.org',
+  'user@sub.domain.com',
+  'user+tag@example.com',
+  'user123@example.com',
+  'user@sub-domain.com',
+];
+
+type InvalidEmailTest = [unknown, string];
+const invalidEmails: InvalidEmailTest[] = [
+  ['', 'empty string'],
+  ['invalid', 'string without @'],
+  ['no-at-sign', 'string with @ but no domain'],
+  [null, 'null'],
+  [undefined, 'undefined'],
+  ['   ', 'whitespace only'],
+  [123, 'number'],
+  [{}, 'object'],
+  [true, 'boolean true'],
+  [false, 'boolean false'],
+  [[], 'array'],
+];
+
+type GuestPathTest = [string, boolean];
+const guestPathTests: GuestPathTest[] = [
+  ['/auth/verify', true],
+  ['/api/auth/verify', true],
+  ['/auth/verify/extra', true],
+  ['/some/path/auth/verify', true],
+  ['/api/users', false],
+  ['/api/chat', false],
+  ['/auth/login', false],
+  ['/auth/signup', false],
+  ['/auth', false],
+  ['/', false],
+  ['', false],
+  ['/api/auth', false],
+];
+
 describe('Authentication - isValidEmail', () => {
-  describe('valid emails', () => {
-    it('should return true for valid email', () => {
-      expect(isValidEmail('test@example.com')).toBe(true);
-    });
-
-    it('should return true for email with dot', () => {
-      expect(isValidEmail('user.name@domain.org')).toBe(true);
-    });
-
-    it('should return true for email with subdomain', () => {
-      expect(isValidEmail('user@sub.domain.com')).toBe(true);
-    });
-
-    it('should return true for email with plus sign', () => {
-      expect(isValidEmail('user+tag@example.com')).toBe(true);
-    });
-
-    it('should return true for email with numbers', () => {
-      expect(isValidEmail('user123@example.com')).toBe(true);
-    });
-
-    it('should return true for email with hyphen in domain', () => {
-      expect(isValidEmail('user@sub-domain.com')).toBe(true);
+  describe.each(validEmails)('valid email: %s', (email) => {
+    it(`should return true for ${email}`, () => {
+      expect(isValidEmail(email)).toBe(true);
     });
   });
 
-  describe('invalid emails', () => {
-    it('should return false for empty string', () => {
-      expect(isValidEmail('')).toBe(false);
-    });
-
-    it('should return false for string without @', () => {
-      expect(isValidEmail('invalid')).toBe(false);
-    });
-
-    it('should return false for string with @ but no domain', () => {
-      expect(isValidEmail('no-at-sign')).toBe(false);
-    });
-
-    it('should return false for null', () => {
-      expect(isValidEmail(null)).toBe(false);
-    });
-
-    it('should return false for undefined', () => {
-      expect(isValidEmail(undefined)).toBe(false);
-    });
-
-    it('should return false for whitespace only', () => {
-      expect(isValidEmail('   ')).toBe(false);
-    });
-
-    it('should return false for number input', () => {
-      expect(isValidEmail(123 as any)).toBe(false);
-    });
-
-    it('should return false for object input', () => {
-      expect(isValidEmail({} as any)).toBe(false);
-    });
-
-    it('should return false for boolean input', () => {
-      expect(isValidEmail(true as any)).toBe(false);
-      expect(isValidEmail(false as any)).toBe(false);
-    });
-
-    it('should return false for array input', () => {
-      expect(isValidEmail([] as any)).toBe(false);
+  describe.each(invalidEmails)('invalid email: %s', (email) => {
+    it(`should return false for ${email}`, () => {
+      expect(isValidEmail(email)).toBe(false);
     });
   });
 });
 
 describe('Authentication - isGuestPath', () => {
-  it('should return true for /auth/verify path', () => {
-    expect(isGuestPath('/auth/verify')).toBe(true);
-  });
-
-  it('should return true for /api/auth/verify path', () => {
-    expect(isGuestPath('/api/auth/verify')).toBe(true);
-  });
-
-  it('should return true for /auth/verify/extra path', () => {
-    expect(isGuestPath('/auth/verify/extra')).toBe(true);
-  });
-
-  it('should return true for nested auth/verify paths', () => {
-    expect(isGuestPath('/some/path/auth/verify')).toBe(true);
-  });
-
-  it('should return false for /api/users path', () => {
-    expect(isGuestPath('/api/users')).toBe(false);
-  });
-
-  it('should return false for /api/chat path', () => {
-    expect(isGuestPath('/api/chat')).toBe(false);
-  });
-
-  it('should return false for /auth/login path', () => {
-    expect(isGuestPath('/auth/login')).toBe(false);
-  });
-
-  it('should return false for /auth/signup path', () => {
-    expect(isGuestPath('/auth/signup')).toBe(false);
-  });
-
-  it('should return false for /auth path', () => {
-    expect(isGuestPath('/auth')).toBe(false);
-  });
-
-  it('should return false for root path', () => {
-    expect(isGuestPath('/')).toBe(false);
-  });
-
-  it('should return false for empty path', () => {
-    expect(isGuestPath('')).toBe(false);
-  });
-
-  it('should return false for /api/auth path', () => {
-    expect(isGuestPath('/api/auth')).toBe(false);
+  describe.each(guestPathTests)('path: %s should return %s', (path, expected) => {
+    it(`should return ${expected} for ${path}`, () => {
+      expect(isGuestPath(path)).toBe(expected);
+    });
   });
 });
