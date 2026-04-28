@@ -11,6 +11,7 @@ import {
   createNrtProxy,
   createSimProxy,
 } from './middleware/proxy';
+import { checkBackendHealth, checkSimulationHealth } from './health';
 
 const app = express();
 const server = http.createServer(app);
@@ -129,37 +130,7 @@ const healthStatus = {
   lastCheck: null as string | null,
 };
 
-const checkBackendHealth = async (): Promise<string> => {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(`${config.backendUrl}/health`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    return response.ok ? 'ok' : 'error';
-  } catch {
-    return 'unavailable';
-  }
-};
-
-const checkSimulationHealth = async (): Promise<string> => {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(`${config.simulationUrl}/sim/health`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    return response.ok ? 'ok' : 'error';
-  } catch {
-    return 'unavailable';
-  }
-};
+// checkBackendHealth and checkSimulationHealth are imported from './health'
 
 setInterval(async () => {
   healthStatus.backend = await checkBackendHealth();

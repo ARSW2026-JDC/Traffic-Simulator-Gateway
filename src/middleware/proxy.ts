@@ -40,7 +40,7 @@ function getAgent(target: string) {
 /**
  * Handles proxy errors uniformly
  */
-const createErrorHandler = (proxyName: string) => {
+export const createErrorHandler = (proxyName: string) => {
   return (err: Error, req: IncomingMessage, res: any) => {
     const code = (err as any).code;
     const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
