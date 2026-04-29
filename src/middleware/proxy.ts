@@ -5,8 +5,7 @@
  * - Request timeouts (prevents hanging connections)
  * - WebSocket support with timeout
  * - Proper error handling with context logging
- * - Connection pooling optimization (keep-alive)
- * - Latency optimization
+ * - Per-proxy agent isolation (prevents cross-contamination)
  */
 
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
@@ -16,25 +15,36 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from '../config/config';
 
 /**
- * HTTP and HTTPS Agents with connection keep-alive
- * Reuses connections to reduce latency
+ * Per-proxy agent isolation to prevent cross-contamination
+ * When one service fails repeatedly, its connection pool doesn't affect others
  */
-const agentSettings = {
-  keepAlive: true,
-  keepAliveMsecs: 30000,
-  maxSockets: 256,
-  maxFreeSockets: 64,
-  requestTimeoutMs: 60000,
+const createAgentSettings = (serviceName: string) => {
+  return {
+    keepAlive: true,
+    keepAliveMsecs: 30000,
+    maxSockets: 32,
+    maxFreeSockets: 16,
+    requestTimeoutMs: 60000,
+  };
 };
-const httpAgent = new http.Agent(agentSettings);
-const httpsAgent = new https.Agent(agentSettings);
 
-/**
- * Helper function to get the appropriate agent based on the target URL protocol
- */
-function getAgent(target: string) {
+const httpAgents: Map<string, http.Agent> = new Map();
+const httpsAgents: Map<string, https.Agent> = new Map();
+
+function getAgent(target: string, serviceName: string): http.Agent {
   const isHttps = target.startsWith('https');
-  return isHttps ? httpsAgent : httpAgent;
+  const agents = isHttps ? httpsAgents : httpAgents;
+  
+  if (!agents.has(serviceName)) {
+    const settings = createAgentSettings(serviceName);
+    const agent = isHttps 
+      ? new https.Agent(settings) 
+      : new http.Agent(settings);
+    agents.set(serviceName, agent);
+    console.log(`[PROXY] Created isolated ${serviceName} agent (${isHttps ? 'HTTPS' : 'HTTP'})`);
+  }
+  
+  return agents.get(serviceName)!;
 }
 
 /**
@@ -45,44 +55,43 @@ const createErrorHandler = (proxyName: string, targetUrl: string) => {
     const code = (err as any).code;
     const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
     
-    // Get the actual path from the incoming request
     const requestPath = req?.url || 'unknown';
     const headers = req?.headers || {};
     const host = headers.host || 'unknown';
     
-    // Determine the correct target path based on proxy name
-    // This helps identify which request path was incorrectly used
     let expectedRoutePath = '';
-    if (proxyName === 'Chat') {
-      expectedRoutePath = '/chat';
-    } else if (proxyName === 'Simulation') {
-      expectedRoutePath = '/sim';
-    } else if (proxyName === 'History') {
-      expectedRoutePath = '/history';
-    }
+    if (proxyName === 'Chat') expectedRoutePath = '/chat';
+    else if (proxyName === 'Simulation') expectedRoutePath = '/sim';
+    else if (proxyName === 'History') expectedRoutePath = '/history';
+
+    console.error(`[${proxyName}] ERROR:`, {
+      message: err.message,
+      code: code || 'UNKNOWN',
+      requestPath,
+      host,
+      expectedRoutePath,
+      target: targetUrl,
+      timestamp: new Date().toISOString(),
+    });
 
     const payload = JSON.stringify({
       error: 'Service unavailable',
       message: `The ${proxyName} service is not responding.`,
       details: err.message,
-      requestPath: requestPath,
+      requestPath,
     });
 
-    // If res is a normal HTTP ServerResponse
     if (res && typeof res.writeHead === 'function') {
       try {
         if ((res as ServerResponse).writableEnded) return;
         (res as ServerResponse).writeHead(statusCode, { 'Content-Type': 'application/json' });
         (res as ServerResponse).end(payload);
-      } catch (writeErr) {
-        try {
-          res.destroy && res.destroy();
-        } catch {}
+      } catch {
+        try { res.destroy && res.destroy(); } catch {}
       }
       return;
     }
 
-    // If res is a raw socket (upgrade / websocket path)
     try {
       if (res && typeof res.write === 'function') {
         const statusText = require('http').STATUS_CODES[statusCode] || 'Error';
@@ -92,16 +101,41 @@ const createErrorHandler = (proxyName: string, targetUrl: string) => {
         return;
       }
 
-      if (req && req.socket && typeof req.socket.destroy === 'function') {
+      if (req?.socket?.destroy) {
         req.socket.destroy();
       }
-    } catch (socketErr) {
-      try {
-        res && res.destroy && res.destroy();
-      } catch {}
+    } catch {
+      try { res?.destroy?.(); } catch {}
     }
   };
 };
+
+/**
+ * Debug logger for proxy events
+ */
+const createDebugLogger = (proxyName: string, targetUrl: string) => ({
+  onProxyReq: (proxyReq: http.ClientRequest, req: IncomingMessage) => {
+    console.log(`[${proxyName}] HTTP request:`, {
+      method: req.method,
+      url: req.url,
+      targetHost: proxyReq.getHeader('host'),
+    });
+  },
+  onProxyReqWs: (proxyReq: http.ClientRequest, req: IncomingMessage, socket: any) => {
+    const auth = req.headers.authorization;
+    console.log(`[${proxyName}] WebSocket upgrade:`, {
+      url: req.url,
+      targetPath: proxyReq.path,
+      hasAuth: !!auth,
+    });
+  },
+  onProxyRes: (proxyRes: http.IncomingMessage, req: IncomingMessage) => {
+    console.log(`[${proxyName}] Response:`, { statusCode: proxyRes.statusCode, url: req.url });
+  },
+  onError: (err: Error, req: IncomingMessage) => {
+    console.error(`[${proxyName}] Error:`, { message: err.message, url: req.url });
+  },
+});
 
 /**
  * Base proxy configuration shared across all proxies
@@ -118,53 +152,50 @@ export function createApiProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.backendUrl,
-    agent: getAgent(config.backendUrl),
+    agent: getAgent(config.backendUrl, 'API'),
     timeout: 60_000,
     proxyTimeout: 60_000,
     on: {
       error: createErrorHandler('API', config.backendUrl),
+      ...createDebugLogger('API', config.backendUrl),
     },
   });
 }
 
 /**
  * Creates WebSocket proxy to Chat service (/chat route)
- * 
- * Note: pathRewrite removes /chat prefix before forwarding to backend
- * The backend expects just /socket.io/... not /chat/socket.io/...
  */
 export function createChatProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.chatUrl,
-    agent: getAgent(config.chatUrl),
+    agent: getAgent(config.chatUrl, 'Chat'),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/chat': '' },
     on: {
       error: createErrorHandler('Chat', config.chatUrl),
+      ...createDebugLogger('Chat', config.chatUrl),
     },
   });
 }
 
 /**
  * Creates WebSocket proxy to Simulation Server (/sim route)
- * 
- * Note: pathRewrite strips /sim prefix before forwarding to backend
- * Frontend uses /sim prefix but backend expects just /socket.io/...
  */
 export function createSimProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.simulationUrl,
-    agent: getAgent(config.simulationUrl),
+    agent: getAgent(config.simulationUrl, 'Simulation'),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
     on: {
       error: createErrorHandler('Simulation', config.simulationUrl),
+      ...createDebugLogger('Simulation', config.simulationUrl),
     },
   });
 }
@@ -176,13 +207,14 @@ export function createHistoryProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.historyUrl,
-    agent: getAgent(config.historyUrl),
+    agent: getAgent(config.historyUrl, 'History'),
     ws: true,
     timeout: 60_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/history': '' },
     on: {
       error: createErrorHandler('History', config.historyUrl),
+      ...createDebugLogger('History', config.historyUrl),
     },
   });
 }
