@@ -247,6 +247,39 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// WEBSOCKET UPGRADE HANDLING
+
+server.on('upgrade', (req, socket, head) => {
+  const url = req.url ?? '';
+  const headers = req.headers;
+  let proxySelected = '';
+  let targetUrl = '';
+  let pathRewriteInfo = '';
+
+  try {
+    if (url.startsWith('/chat')) {
+      proxySelected = 'CHAT';
+      targetUrl = config.chatUrl;
+      pathRewriteInfo = '/chat/socket.io → /socket.io';
+      (chatProxy as any).upgrade(req, socket, head);
+    } else if (url.startsWith('/sim')) {
+      proxySelected = 'SIMULATION';
+      targetUrl = config.simulationUrl;
+      pathRewriteInfo = '/sim/socket.io → /socket.io (strips /sim)';
+      (simProxy as any).upgrade(req, socket, head);
+    } else if (url.startsWith('/history')) {
+      proxySelected = 'HISTORY';
+      targetUrl = config.historyUrl;
+      pathRewriteInfo = '/history/socket.io → /socket.io';
+      (historyProxy as any).upgrade(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+  } catch (error) {
+    socket.destroy();
+  }
+});
+
 // SERVER STARTUP
 
 server.listen(config.port, () => {
