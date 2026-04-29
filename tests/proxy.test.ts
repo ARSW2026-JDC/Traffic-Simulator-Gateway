@@ -1,4 +1,4 @@
-import { createApiProxy, createNrtProxy, createSimProxy } from '../src/middleware/proxy';
+import { createApiProxy, createHistoryProxy, createChatProxy, createSimProxy } from '../src/middleware/proxy';
 import { describe, it, expect, jest } from '@jest/globals';
 
 describe('Proxy Middleware', () => {
@@ -10,9 +10,17 @@ describe('Proxy Middleware', () => {
     });
   });
 
-  describe('createNrtProxy', () => {
+  describe('createHistoryProxy', () => {
     it('should return a proxy middleware function', () => {
-      const proxy = createNrtProxy();
+      const proxy = createHistoryProxy();
+      expect(proxy).toBeDefined();
+      expect(typeof proxy).toBe('function');
+    });
+  });
+
+  describe('createChatProxy', () => {
+    it('should return a proxy middleware function', () => {
+      const proxy = createChatProxy();
       expect(proxy).toBeDefined();
       expect(typeof proxy).toBe('function');
     });
@@ -72,10 +80,16 @@ describe('Proxy Module Exports', () => {
     expect(typeof createApiProxy).toBe('function');
   });
 
-  it('should export createNrtProxy', async () => {
-    const { createNrtProxy } = await import('../src/middleware/proxy');
-    expect(createNrtProxy).toBeDefined();
-    expect(typeof createNrtProxy).toBe('function');
+  it('should export createHistoryProxy', async () => {
+    const { createHistoryProxy } = await import('../src/middleware/proxy');
+    expect(createHistoryProxy).toBeDefined();
+    expect(typeof createHistoryProxy).toBe('function');
+  });
+
+  it('should export createChatProxy', async () => {
+    const { createChatProxy } = await import('../src/middleware/proxy');
+    expect(createChatProxy).toBeDefined();
+    expect(typeof createChatProxy).toBe('function');
   });
 
   it('should export createSimProxy', async () => {

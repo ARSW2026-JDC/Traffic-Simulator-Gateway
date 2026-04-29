@@ -8,6 +8,8 @@
 export interface ValidatedEnv {
   port: number;
   backendUrl: string;
+  chatUrl: string;
+  historyUrl: string;
   simulationUrl: string;
   firebaseProjectId: string;
   firebaseClientEmail: string;
@@ -71,6 +73,22 @@ export function validateEnvironment(): ValidatedEnv {
   const simulationUrl = process.env.SIMULATION_URL || 'http://localhost:5000';
   try {
     validateUrl(simulationUrl, 'SIMULATION_URL');
+  } catch (e) {
+    errors.push((e as Error).message);
+  }
+
+  // CHAT_URL
+  const chatUrl = process.env.CHAT_URL || 'http://localhost:6000';
+  try {
+    validateUrl(chatUrl, 'CHAT_URL');
+  } catch (e) {
+    errors.push((e as Error).message);
+  }
+
+  // HISTORY_URL
+  const historyUrl = process.env.HISTORY_URL || 'http://localhost:3060';
+  try {
+    validateUrl(historyUrl, 'HISTORY_URL');
   } catch (e) {
     errors.push((e as Error).message);
   }
@@ -141,6 +159,8 @@ export function validateEnvironment(): ValidatedEnv {
     port,
     backendUrl,
     simulationUrl,
+    chatUrl,
+    historyUrl,
     firebaseProjectId,
     firebaseClientEmail,
     firebasePrivateKey,

@@ -33,27 +33,39 @@ const httpsAgent = new https.Agent(agentSettings);
  * Helper function to get the appropriate agent based on the target URL protocol
  */
 function getAgent(target: string) {
-  return target.startsWith('https')
-    ? httpsAgent
-    : httpAgent;
+  const isHttps = target.startsWith('https');
+  return isHttps ? httpsAgent : httpAgent;
 }
+
 /**
- * Handles proxy errors uniformly
+ * Creates detailed error handler with context
  */
-const createErrorHandler = (proxyName: string) => {
+const createErrorHandler = (proxyName: string, targetUrl: string) => {
   return (err: Error, req: IncomingMessage, res: any) => {
     const code = (err as any).code;
     const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
-    console.error(`[${proxyName}] Error:`, {
-      message: err.message,
-      code,
-      method: req?.method,
-      url: req?.url,
-    });
+    
+    // Get the actual path from the incoming request
+    const requestPath = req?.url || 'unknown';
+    const headers = req?.headers || {};
+    const host = headers.host || 'unknown';
+    
+    // Determine the correct target path based on proxy name
+    // This helps identify which request path was incorrectly used
+    let expectedRoutePath = '';
+    if (proxyName === 'Chat') {
+      expectedRoutePath = '/chat';
+    } else if (proxyName === 'Simulation') {
+      expectedRoutePath = '/sim';
+    } else if (proxyName === 'History') {
+      expectedRoutePath = '/history';
+    }
 
     const payload = JSON.stringify({
       error: 'Service unavailable',
       message: `The ${proxyName} service is not responding.`,
+      details: err.message,
+      requestPath: requestPath,
     });
 
     // If res is a normal HTTP ServerResponse
@@ -63,7 +75,6 @@ const createErrorHandler = (proxyName: string) => {
         (res as ServerResponse).writeHead(statusCode, { 'Content-Type': 'application/json' });
         (res as ServerResponse).end(payload);
       } catch (writeErr) {
-        // Best-effort: destroy if unable to write
         try {
           res.destroy && res.destroy();
         } catch {}
@@ -71,7 +82,7 @@ const createErrorHandler = (proxyName: string) => {
       return;
     }
 
-    // If res is a raw socket (upgrade / websocket path) - try best-effort minimal HTTP response
+    // If res is a raw socket (upgrade / websocket path)
     try {
       if (res && typeof res.write === 'function') {
         const statusText = require('http').STATUS_CODES[statusCode] || 'Error';
@@ -81,7 +92,6 @@ const createErrorHandler = (proxyName: string) => {
         return;
       }
 
-      // Fallback: destroy underlying request socket if present
       if (req && req.socket && typeof req.socket.destroy === 'function') {
         req.socket.destroy();
       }
@@ -112,43 +122,67 @@ export function createApiProxy() {
     timeout: 60_000,
     proxyTimeout: 60_000,
     on: {
-      error: createErrorHandler('API'),
+      error: createErrorHandler('API', config.backendUrl),
     },
   });
 }
 
 /**
- * Creates WebSocket proxy to Backend NRT (/nrt route)
+ * Creates WebSocket proxy to Chat service (/chat route)
+ * 
+ * Note: pathRewrite removes /chat prefix before forwarding to backend
+ * The backend expects just /socket.io/... not /chat/socket.io/...
  */
-export function createNrtProxy() {
+export function createChatProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
-    target: config.backendUrl,
-    agent: getAgent(config.backendUrl),
+    target: config.chatUrl,
+    agent: getAgent(config.chatUrl),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
-    pathRewrite: { '^/nrt': '' },
+    pathRewrite: { '^/chat': '' },
     on: {
-      error: createErrorHandler('Chat'),
+      error: createErrorHandler('Chat', config.chatUrl),
     },
   });
 }
 
 /**
  * Creates WebSocket proxy to Simulation Server (/sim route)
+ * 
+ * Note: pathRewrite strips /sim prefix before forwarding to backend
+ * Frontend uses /sim prefix but backend expects just /socket.io/...
  */
 export function createSimProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.simulationUrl,
-    agent: getAgent(config.backendUrl),
+    agent: getAgent(config.simulationUrl),
     ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
     on: {
-      error: createErrorHandler('Simulation'),
+      error: createErrorHandler('Simulation', config.simulationUrl),
+    },
+  });
+}
+
+/**
+ * Creates proxy to History Service (/history route)
+ */
+export function createHistoryProxy() {
+  return createProxyMiddleware({
+    ...baseProxyOptions,
+    target: config.historyUrl,
+    agent: getAgent(config.historyUrl),
+    ws: true,
+    timeout: 60_000,
+    proxyTimeout: 600_000,
+    pathRewrite: { '^/history': '' },
+    on: {
+      error: createErrorHandler('History', config.historyUrl),
     },
   });
 }
