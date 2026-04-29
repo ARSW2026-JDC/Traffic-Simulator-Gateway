@@ -8,8 +8,9 @@ import { config } from './config/config';
 import { authMiddleware } from './authentication/auth';
 import {
   createApiProxy,
-  createNrtProxy,
+  createChatProxy,
   createSimProxy,
+  createHistoryProxy,
 } from './middleware/proxy';
 
 const app = express();
@@ -55,11 +56,11 @@ const apiLimiter: RateLimitRequestHandler = rateLimit({
 });
 
 /**
- * NRT (Chat/Real-time) rate limiter: 50 requests per minute
+ * chat (Chat/Real-time) rate limiter: 50 requests per minute
  * - More restrictive for chat/real-time connections
  * - Critical for stability
  */
-const nrtLimiter: RateLimitRequestHandler = rateLimit({
+const chatLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
   max: 50,
   standardHeaders: true,
@@ -67,7 +68,7 @@ const nrtLimiter: RateLimitRequestHandler = rateLimit({
     return req.method === 'GET' && req.get('upgrade') === 'websocket';
   },
   handler: (req, res) => {
-    console.warn('[rate-limit] NRT rate limit exceeded:', {
+    console.warn('[rate-limit] chat rate limit exceeded:', {
       ip: req.ip,
       path: req.path,
     });
@@ -106,16 +107,20 @@ const simLimiter: RateLimitRequestHandler = rateLimit({
 // PROXY MIDDLEWARE (with timeouts and error handling)
 
 const apiProxy = createApiProxy();
-const nrtProxy = createNrtProxy();
+const chatProxy = createChatProxy();
 const simProxy = createSimProxy();
+const historyProxy = createHistoryProxy();
 
 // ROUTES
 
 // API route: /api → Backend (with authentication and rate limiting)
 app.use('/api', apiLimiter, authMiddleware, apiProxy);
 
-// NRT route: /nrt → Backend (WebSocket for chat, with rate limiting)
-app.use('/nrt', nrtLimiter, nrtProxy);
+// History route: /history → History Service
+app.use('/history', apiLimiter, authMiddleware, historyProxy);
+
+// chat route: /chat → Chat Service (WebSocket for chat, with rate limiting)
+app.use('/chat', chatLimiter, chatProxy);
 
 // SIM route: /sim → Simulation Server (WebSocket, with rate limiting)
 app.use('/sim', simLimiter, simProxy);
@@ -125,6 +130,8 @@ app.use('/sim', simLimiter, simProxy);
 const healthStatus = {
   gateway: 'ok',
   backend: 'unknown',
+  chat: 'unknown',
+  history: 'unknown',
   simulationServer: 'unknown',
   lastCheck: null as string | null,
 };
@@ -150,7 +157,39 @@ const checkSimulationHealth = async (): Promise<string> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${config.simulationUrl}/sim/health`, {
+    const response = await fetch(`${config.simulationUrl}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    return response.ok ? 'ok' : 'error';
+  } catch {
+    return 'unavailable';
+  }
+};
+
+const checkChatHealth = async (): Promise<string> => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(`${config.chatUrl}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    return response.ok ? 'ok' : 'error';
+  } catch {
+    return 'unavailable';
+  }
+};
+
+const checkHistoryHealth = async (): Promise<string> => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(`${config.historyUrl}/health`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -164,6 +203,8 @@ const checkSimulationHealth = async (): Promise<string> => {
 setInterval(async () => {
   healthStatus.backend = await checkBackendHealth();
   healthStatus.simulationServer = await checkSimulationHealth();
+  healthStatus.chat = await checkChatHealth();
+  healthStatus.history = await checkHistoryHealth();
   healthStatus.lastCheck = new Date().toISOString();
 }, 30_000);
 
@@ -176,12 +217,21 @@ checkSimulationHealth().then((status) => {
   healthStatus.simulationServer = status;
   console.info(`[health] Simulation Server status: ${status}`);
 });
+checkChatHealth().then((status) => {
+  healthStatus.chat = status;
+  console.info(`[health] Chat Server status: ${status}`);
+});
+checkHistoryHealth().then((status) => {
+  healthStatus.history = status;
+  console.info(`[health] History Server status: ${status}`);
+});
+
 healthStatus.lastCheck = new Date().toISOString();
 
 // Health check endpoint with dependency status
 app.get('/health', (_req, res) => {
   const allHealthy =
-    healthStatus.backend === 'ok' && healthStatus.simulationServer === 'ok';
+    healthStatus.backend === 'ok' && healthStatus.simulationServer === 'ok' && healthStatus.history === 'ok' && healthStatus.chat === 'ok';
 
   res.status(allHealthy ? 200 : 503).json({
     status: allHealthy ? 'ok' : 'degraded',
@@ -190,6 +240,8 @@ app.get('/health', (_req, res) => {
       gateway: healthStatus.gateway,
       backend: healthStatus.backend,
       simulationServer: healthStatus.simulationServer,
+      chat: healthStatus.chat,
+      history: healthStatus.history,
       lastCheck: healthStatus.lastCheck,
     },
   });
@@ -201,16 +253,16 @@ server.on('upgrade', (req, socket, head) => {
   const url = req.url ?? '';
 
   try {
-    if (url.startsWith('/nrt')) {
-      (nrtProxy as any).upgrade(req, socket, head);
+    if (url.startsWith('/chat')) {
+      (chatProxy as any).upgrade(req, socket, head);
     } else if (url.startsWith('/sim')) {
       (simProxy as any).upgrade(req, socket, head);
+    } else if (url.startsWith('/history')) {
+      (historyProxy as any).upgrade(req, socket, head);
     } else {
-      console.warn(`[upgrade] Rejecting unknown WebSocket upgrade request: ${url}`);
       socket.destroy();
     }
-  } catch (error) {
-    console.error('[upgrade] Error handling WebSocket upgrade:', error);
+  } catch {
     socket.destroy();
   }
 });
@@ -221,7 +273,8 @@ server.listen(config.port, () => {
   console.info(`
   Gateway http://localhost:${config.port}
     /api ${config.backendUrl}  (with auth)
-    /nrt ${config.backendUrl}  (WebSocket)
+    /chat ${config.chatUrl}  (WebSocket)
+    /history ${config.historyUrl}  (WebSocket)
     /sim ${config.simulationUrl} (WebSocket)
   CORS Origin: ${config.allowedOrigin}
   Health Check: http://localhost:${config.port}/health
