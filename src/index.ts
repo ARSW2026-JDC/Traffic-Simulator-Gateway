@@ -16,7 +16,7 @@ import {
 const app = express();
 const server = http.createServer(app);
 
-// MIDDLEWARE STACK
+app.set('trust proxy', 1);
 
 app.use(morgan('combined'));
 
@@ -30,6 +30,15 @@ app.use(
 
 // RATE LIMITING (Per-route configuration)
 
+const SKIP_SOCKET_IO = (req: express.Request): boolean => {
+  const path = req.path || req.url || '';
+  return (
+    path.includes('/socket.io') ||
+    path.includes('/socket.io/') ||
+    req.get('upgrade') === 'websocket'
+  );
+};
+
 /**
  * API rate limiter: 300 requests per minute
  * - Standard REST API calls
@@ -39,9 +48,7 @@ const apiLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000, // 1 minute
   max: 300, // 300 requests per window
   standardHeaders: true,
-  skip: (req) => {
-    return false;
-  },
+  skip: SKIP_SOCKET_IO,
   handler: (req, res) => {
     console.warn('[rate-limit] API rate limit exceeded:', {
       ip: req.ip,
@@ -64,9 +71,7 @@ const chatLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
   max: 50,
   standardHeaders: true,
-  skip: (req) => {
-    return req.method === 'GET' && req.get('upgrade') === 'websocket';
-  },
+  skip: SKIP_SOCKET_IO,
   handler: (req, res) => {
     console.warn('[rate-limit] chat rate limit exceeded:', {
       ip: req.ip,
@@ -88,9 +93,7 @@ const simLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
   max: 100,
   standardHeaders: true,
-  skip: (req) => {
-    return req.method === 'GET' && req.get('upgrade') === 'websocket';
-  },
+  skip: SKIP_SOCKET_IO,
   handler: (req, res) => {
     console.warn('[rate-limit] Simulation rate limit exceeded:', {
       ip: req.ip,
