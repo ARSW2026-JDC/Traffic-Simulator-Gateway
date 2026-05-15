@@ -1,11 +1,18 @@
 /**
  * Proxy Middleware Configuration
- * 
+ *
  * Configures HTTP reverse proxies with:
  * - Request timeouts (prevents hanging connections)
  * - WebSocket support with timeout
  * - Proper error handling with context logging
  * - Per-proxy agent isolation (prevents cross-contamination)
+ *
+ * NOTE: WebSocket proxies (chat, sim, history) do NOT use ws:true nor a
+ * keepAlive agent.  Both options interfere with the TCP-hijack that the
+ * WebSocket upgrade requires and cause every proxy to register its own
+ * "upgrade" listener on the server, producing the ECONNRESET fan-out bug.
+ * The single server.on('upgrade', …) handler in index.ts is the only place
+ * where WS connections are dispatched.
  */
 
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
@@ -14,19 +21,17 @@ import https from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from '../config/config';
 
-/**
- * Per-proxy agent isolation to prevent cross-contamination
- * When one service fails repeatedly, its connection pool doesn't affect others
- */
-const createAgentSettings = (serviceName: string) => {
-  return {
-    keepAlive: true,
-    keepAliveMsecs: 30000,
-    maxSockets: 32,
-    maxFreeSockets: 16,
-    requestTimeoutMs: 60000,
-  };
-};
+// ---------------------------------------------------------------------------
+// Agent helpers  (only used for the pure-HTTP API proxy)
+// ---------------------------------------------------------------------------
+
+const createAgentSettings = (_serviceName: string) => ({
+  keepAlive: true,
+  keepAliveMsecs: 30_000,
+  maxSockets: 32,
+  maxFreeSockets: 16,
+  requestTimeoutMs: 60_000,
+});
 
 const httpAgents: Map<string, http.Agent> = new Map();
 const httpsAgents: Map<string, https.Agent> = new Map();
@@ -34,35 +39,39 @@ const httpsAgents: Map<string, https.Agent> = new Map();
 function getAgent(target: string, serviceName: string): http.Agent {
   const isHttps = target.startsWith('https');
   const agents = isHttps ? httpsAgents : httpAgents;
-  
+
   if (!agents.has(serviceName)) {
     const settings = createAgentSettings(serviceName);
-    const agent = isHttps 
-      ? new https.Agent(settings) 
+    const agent = isHttps
+      ? new https.Agent(settings)
       : new http.Agent(settings);
     agents.set(serviceName, agent);
-    console.log(`[PROXY] Created isolated ${serviceName} agent (${isHttps ? 'HTTPS' : 'HTTP'})`);
+    console.log(
+      `[PROXY] Created isolated ${serviceName} agent (${isHttps ? 'HTTPS' : 'HTTP'})`,
+    );
   }
-  
+
   return agents.get(serviceName)!;
 }
 
-/**
- * Creates detailed error handler with context
- */
+// ---------------------------------------------------------------------------
+// Error handler
+// ---------------------------------------------------------------------------
+
 const createErrorHandler = (proxyName: string, targetUrl: string) => {
   return (err: Error, req: IncomingMessage, res: any) => {
     const code = (err as any).code;
     const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
-    
+
     const requestPath = req?.url || 'unknown';
-    const headers = req?.headers || {};
-    const host = headers.host || 'unknown';
-    
-    let expectedRoutePath = '';
-    if (proxyName === 'Chat') expectedRoutePath = '/chat';
-    else if (proxyName === 'Simulation') expectedRoutePath = '/sim';
-    else if (proxyName === 'History') expectedRoutePath = '/history';
+    const host = req?.headers?.host || 'unknown';
+
+    const routeMap: Record<string, string> = {
+      Chat: '/chat',
+      Simulation: '/sim',
+      History: '/history',
+    };
+    const expectedRoutePath = routeMap[proxyName] ?? '';
 
     console.error(`[${proxyName}] ERROR:`, {
       message: err.message,
@@ -81,39 +90,50 @@ const createErrorHandler = (proxyName: string, targetUrl: string) => {
       requestPath,
     });
 
+    // HTTP response (regular requests)
     if (res && typeof res.writeHead === 'function') {
       try {
         if ((res as ServerResponse).writableEnded) return;
-        (res as ServerResponse).writeHead(statusCode, { 'Content-Type': 'application/json' });
+        (res as ServerResponse).writeHead(statusCode, {
+          'Content-Type': 'application/json',
+        });
         (res as ServerResponse).end(payload);
       } catch {
-        try { res.destroy && res.destroy(); } catch {}
+        try {
+          res.destroy?.();
+        } catch {}
       }
       return;
     }
 
+    // WebSocket / raw socket fallback
     try {
       if (res && typeof res.write === 'function') {
-        const statusText = require('http').STATUS_CODES[statusCode] || 'Error';
-        const header = `HTTP/1.1 ${statusCode} ${statusText}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload)}\r\nConnection: close\r\n\r\n`;
+        const statusText =
+          require('http').STATUS_CODES[statusCode] || 'Error';
+        const header =
+          `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+          `Content-Type: application/json\r\n` +
+          `Content-Length: ${Buffer.byteLength(payload)}\r\n` +
+          `Connection: close\r\n\r\n`;
         res.write(header + payload);
-        res.end && res.end();
+        res.end?.();
         return;
       }
-
-      if (req?.socket?.destroy) {
-        req.socket.destroy();
-      }
+      req?.socket?.destroy();
     } catch {
-      try { res?.destroy?.(); } catch {}
+      try {
+        res?.destroy?.();
+      } catch {}
     }
   };
 };
 
-/**
- * Debug logger for proxy events
- */
-const createDebugLogger = (proxyName: string, targetUrl: string) => ({
+// ---------------------------------------------------------------------------
+// Debug logger
+// ---------------------------------------------------------------------------
+
+const createDebugLogger = (proxyName: string, _targetUrl: string) => ({
   onProxyReq: (proxyReq: http.ClientRequest, req: IncomingMessage) => {
     console.log(`[${proxyName}] HTTP request:`, {
       method: req.method,
@@ -121,32 +141,48 @@ const createDebugLogger = (proxyName: string, targetUrl: string) => ({
       targetHost: proxyReq.getHeader('host'),
     });
   },
-  onProxyReqWs: (proxyReq: http.ClientRequest, req: IncomingMessage, socket: any) => {
-    const auth = req.headers.authorization;
+  onProxyReqWs: (
+    proxyReq: http.ClientRequest,
+    req: IncomingMessage,
+    _socket: any,
+  ) => {
     console.log(`[${proxyName}] WebSocket upgrade:`, {
       url: req.url,
       targetPath: proxyReq.path,
-      hasAuth: !!auth,
+      hasAuth: !!req.headers.authorization,
     });
   },
   onProxyRes: (proxyRes: http.IncomingMessage, req: IncomingMessage) => {
-    console.log(`[${proxyName}] Response:`, { statusCode: proxyRes.statusCode, url: req.url });
+    console.log(`[${proxyName}] Response:`, {
+      statusCode: proxyRes.statusCode,
+      url: req.url,
+    });
   },
   onError: (err: Error, req: IncomingMessage) => {
-    console.error(`[${proxyName}] Error:`, { message: err.message, url: req.url });
+    console.error(`[${proxyName}] Error:`, {
+      message: err.message,
+      url: req.url,
+    });
   },
 });
 
-/**
- * Base proxy configuration shared across all proxies
- */
+// ---------------------------------------------------------------------------
+// Shared base options
+// ---------------------------------------------------------------------------
+
 const baseProxyOptions: Partial<Options> = {
   changeOrigin: true,
   xfwd: false,
 };
 
+// ---------------------------------------------------------------------------
+// Proxies
+// ---------------------------------------------------------------------------
+
 /**
- * Creates HTTP proxy to Backend API (/api route)
+ * HTTP proxy → Backend API  (/api)
+ *
+ * Uses a keepAlive agent because this is pure REST — no WS upgrades.
  */
 export function createApiProxy() {
   return createProxyMiddleware({
@@ -163,14 +199,17 @@ export function createApiProxy() {
 }
 
 /**
- * Creates WebSocket proxy to Chat service (/chat route)
+ * WebSocket proxy → Chat service  (/chat)
+ *
+ * - NO ws: true   → prevents internal "upgrade" listener registration
+ * - NO agent      → keepAlive agents are incompatible with WS TCP-hijack
+ *
+ * WS upgrades are dispatched by the single server.on('upgrade') in index.ts.
  */
 export function createChatProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.chatUrl,
-    agent: getAgent(config.chatUrl, 'Chat'),
-    ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/chat': '' },
@@ -182,14 +221,15 @@ export function createChatProxy() {
 }
 
 /**
- * Creates WebSocket proxy to Simulation Server (/sim route)
+ * WebSocket proxy → Simulation server  (/sim)
+ *
+ * - NO ws: true
+ * - NO agent
  */
 export function createSimProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.simulationUrl,
-    agent: getAgent(config.simulationUrl, 'Simulation'),
-    ws: true,
     timeout: 600_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/sim': '' },
@@ -201,14 +241,15 @@ export function createSimProxy() {
 }
 
 /**
- * Creates proxy to History Service (/history route)
+ * WebSocket proxy → History service  (/history)
+ *
+ * - NO ws: true
+ * - NO agent
  */
 export function createHistoryProxy() {
   return createProxyMiddleware({
     ...baseProxyOptions,
     target: config.historyUrl,
-    agent: getAgent(config.historyUrl, 'History'),
-    ws: true,
     timeout: 60_000,
     proxyTimeout: 600_000,
     pathRewrite: { '^/history': '' },
