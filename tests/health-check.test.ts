@@ -1,4 +1,4 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 
 // Skip the actual health check function tests for now - they're difficult to mock properly
 // We'll just test the logic separately
