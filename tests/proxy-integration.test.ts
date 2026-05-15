@@ -1,5 +1,4 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import http from 'node:http';
 import { createApiProxy, createHistoryProxy, createChatProxy, createSimProxy } from '../src/middleware/proxy';
 import { config } from '../src/config/config';
 
