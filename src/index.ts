@@ -285,6 +285,7 @@ server.listen(config.port, () => {
 });
 
 // Graceful shutdown
+
 process.on('SIGTERM', () => {
   console.info('SIGTERM signal received: closing HTTP server');
   server.close(() => {
@@ -292,6 +293,26 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
+
+process.on('SIGINT', () => {
+  console.info('SIGINT signal received: closing HTTP server');
+  server.close(() => {
+    console.info('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+// Export functions for testing
+export {
+  checkBackendHealth,
+  checkSimulationHealth,
+  checkChatHealth,
+  checkHistoryHealth,
+  SKIP_SOCKET_IO,
+  apiLimiter,
+  chatLimiter,
+  simLimiter
+};
 
 process.on('SIGINT', () => {
   console.info('SIGINT signal received: closing HTTP server');
