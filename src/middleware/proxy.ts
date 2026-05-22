@@ -20,6 +20,7 @@ import http from 'node:http';
 import https from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from '../config/config';
+import { proxyErrorsTotal } from '../metrics/index';
 
 // ---------------------------------------------------------------------------
 // Agent helpers  (only used for the pure-HTTP API proxy)
@@ -60,8 +61,9 @@ function getAgent(target: string, serviceName: string): http.Agent {
 
 const createErrorHandler = (proxyName: string, targetUrl: string) => {
   return (err: Error, req: IncomingMessage, res: any) => {
-    const code = (err as any).code;
+    const code = (err as any).code || 'UNKNOWN';
     const statusCode = code === 'ECONNREFUSED' ? 503 : 502;
+    proxyErrorsTotal.inc({ target: proxyName.toLowerCase(), error_code: code });
 
     const requestPath = req?.url || 'unknown';
     const host = req?.headers?.host || 'unknown';
@@ -259,3 +261,5 @@ export function createHistoryProxy() {
     },
   });
 }
+
+export { createErrorHandler, createDebugLogger };
