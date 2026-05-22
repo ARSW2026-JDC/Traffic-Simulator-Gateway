@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - cuts-gateway
+name: Build and deploy Node.js app to Azure Web App - gateway-CUTS
 
 on:
   push:
@@ -17,13 +17,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js version
         uses: actions/setup-node@v3
         with:
-          node-version: '20.x'
+          node-version: '24.x'
 
       - name: npm install, build, and test
         run: |
@@ -53,15 +51,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_FC0555A1B7D74FCE82BF28CCB2F46EE5 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2FA043591D1B487BA8A97344303C3170 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CD983073E1F844C7859F79E13B2F972D }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_531A8A1BE669423180D84494CF725389 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_C3E9E544D47E4D8CB129143DEA31D49C }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B610290A20C848D394BFC7309409BDB5 }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'cuts-gateway'
+          app-name: 'gateway-CUTS'
           slot-name: 'Production'
           package: .
           
