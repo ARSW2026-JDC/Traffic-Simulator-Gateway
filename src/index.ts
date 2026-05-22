@@ -336,6 +336,8 @@ process.on('SIGINT', () => {
 
 // Export functions for testing
 export {
+  app,
+  server,
   checkBackendHealth,
   checkSimulationHealth,
   checkChatHealth,
@@ -343,7 +345,7 @@ export {
   SKIP_SOCKET_IO,
   apiLimiter,
   chatLimiter,
-  simLimiter
+  simLimiter,
 };
 
 process.on('SIGINT', () => {

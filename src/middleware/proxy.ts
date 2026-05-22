@@ -261,3 +261,5 @@ export function createHistoryProxy() {
     },
   });
 }
+
+export { createErrorHandler, createDebugLogger };

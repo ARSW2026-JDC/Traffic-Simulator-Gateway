@@ -147,3 +147,4 @@ export function stopMetricsPush(): void {
 }
 
 export { registry }
+export { convertToTimeseries, push }
