@@ -26,11 +26,16 @@ app.use(morgan('combined'));
 app.use(
   cors({
     origin: config.allowedOrigin,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
   }),
 );
 
+// Handle preflight requests for all routes
 app.use(metricsMiddleware);
+
+app.options('*', cors());
 
 // RATE LIMITING (Per-route configuration)
 
