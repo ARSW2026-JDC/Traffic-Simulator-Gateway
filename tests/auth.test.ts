@@ -11,7 +11,15 @@ jest.mock('firebase-admin', () => ({
   })),
 }));
 
-import { isGuestPath } from '../src/authentication/auth';
+let isGuestPath: (path: string) => boolean;
+
+beforeAll(() => {
+  process.env.FIREBASE_PROJECT_ID = 'test-project';
+  process.env.FIREBASE_CLIENT_EMAIL = 'test@test.com';
+  process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----';
+  jest.resetModules();
+  isGuestPath = require('../src/authentication/auth').isGuestPath;
+});
 
 describe('isGuestPath', () => {
   it('should return true for exact guest path', () => {
