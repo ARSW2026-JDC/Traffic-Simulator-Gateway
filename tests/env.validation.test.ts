@@ -6,6 +6,10 @@ import {
   validateEnvironment,
 } from '../src/config/env.validation';
 
+const PK_HEADER = '-----BEGIN PRIVATE KEY-----'
+const PK_FOOTER = '-----END PRIVATE KEY-----'
+const pk = (content: string) => `${PK_HEADER}\n${content}\n${PK_FOOTER}`
+
 describe('validateUrl', () => {
   it('should accept valid HTTP URLs', () => {
     expect(() => validateUrl('http://localhost:4000', 'TEST')).not.toThrow();
@@ -36,9 +40,7 @@ describe('validatePort', () => {
 
 describe('validateFirebasePrivateKey', () => {
   it('should accept valid private keys', () => {
-    const validKey = `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBA
------END PRIVATE KEY-----`;
+    const validKey = pk('MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBA');
     expect(() => validateFirebasePrivateKey(validKey)).not.toThrow();
   });
 
@@ -196,7 +198,7 @@ describe('validateEnvironment', () => {
   it('should fail when Firebase client email is invalid', () => {
     process.env.FIREBASE_PROJECT_ID = 'my-project';
     process.env.FIREBASE_CLIENT_EMAIL = 'not-an-email';
-    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----';
+    process.env.FIREBASE_PRIVATE_KEY = pk('key');
     const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     validateEnvironment();
@@ -208,7 +210,7 @@ describe('validateEnvironment', () => {
   it('should succeed when all Firebase vars are valid', () => {
     process.env.FIREBASE_PROJECT_ID = 'my-project';
     process.env.FIREBASE_CLIENT_EMAIL = 'firebase@test.com';
-    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----';
+    process.env.FIREBASE_PRIVATE_KEY = pk('MII');
     const result = validateEnvironment();
     expect(result.firebaseProjectId).toBe('my-project');
     expect(result.firebaseClientEmail).toBe('firebase@test.com');
@@ -217,7 +219,7 @@ describe('validateEnvironment', () => {
   it('should replace \\n with actual newlines in private key', () => {
     process.env.FIREBASE_PROJECT_ID = 'my-project';
     process.env.FIREBASE_CLIENT_EMAIL = 'firebase@test.com';
-    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\\nMII\\n-----END PRIVATE KEY-----';
+    process.env.FIREBASE_PRIVATE_KEY = `${PK_HEADER}\\nMII\\n${PK_FOOTER}`;
     const result = validateEnvironment();
     expect(result.firebasePrivateKey).toContain('\n');
   });

@@ -11,12 +11,16 @@ jest.mock('firebase-admin', () => ({
   })),
 }));
 
+const PK_HEADER = '-----BEGIN PRIVATE KEY-----'
+const PK_FOOTER = '-----END PRIVATE KEY-----'
+const pk = (content: string) => `${PK_HEADER}\n${content}\n${PK_FOOTER}`
+
 let isGuestPath: (path: string) => boolean;
 
 beforeAll(() => {
   process.env.FIREBASE_PROJECT_ID = 'test-project';
   process.env.FIREBASE_CLIENT_EMAIL = 'test@test.com';
-  process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----';
+  process.env.FIREBASE_PRIVATE_KEY = pk('MII');
   jest.resetModules();
   isGuestPath = require('../src/authentication/auth').isGuestPath;
 });
@@ -50,7 +54,7 @@ describe('getFirebaseApp', () => {
     const oldEnv = { ...process.env };
     process.env.FIREBASE_PROJECT_ID = 'test-project';
     process.env.FIREBASE_CLIENT_EMAIL = 'test@test.com';
-    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----';
+    process.env.FIREBASE_PRIVATE_KEY = pk('MII');
 
     jest.isolateModules(() => {
       const admin = require('firebase-admin');
@@ -67,7 +71,7 @@ describe('getFirebaseApp', () => {
     const oldEnv = { ...process.env };
     process.env.FIREBASE_PROJECT_ID = 'test-project';
     process.env.FIREBASE_CLIENT_EMAIL = 'test@test.com';
-    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----';
+    process.env.FIREBASE_PRIVATE_KEY = pk('MII');
 
     jest.isolateModules(() => {
       const admin = require('firebase-admin');
