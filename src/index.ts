@@ -32,12 +32,10 @@ app.use(
   }),
 );
 
-<<<<<<< HEAD
 // Handle preflight requests for all routes
-app.options('*', cors());
-=======
 app.use(metricsMiddleware);
->>>>>>> a302929e6f6c73ab26c618757732c683fc03e69e
+
+app.options('*', cors());
 
 // RATE LIMITING (Per-route configuration)
 
