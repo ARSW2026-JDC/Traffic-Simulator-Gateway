@@ -48,6 +48,38 @@ export const rateLimitExceededTotal = new client.Counter({
   registers: [registry],
 })
 
+// Frontend E2E metrics
+
+export const frontendPageLoadSeconds = new client.Histogram({
+  name: 'frontend_page_load_seconds',
+  help: 'Page load timings from browser Performance API (ttfb, fcp, lcp, cls, dom_ready)',
+  labelNames: ['metric'],
+  buckets: [0.1, 0.5, 1, 2, 3, 5, 8, 10],
+  registers: [registry],
+})
+
+export const frontendApiDurationSeconds = new client.Histogram({
+  name: 'frontend_api_duration_seconds',
+  help: 'API call duration from browser',
+  labelNames: ['method', 'route'],
+  buckets: [0.05, 0.1, 0.2, 0.5, 1, 2, 5],
+  registers: [registry],
+})
+
+export const frontendWsConnectionTime = new client.Gauge({
+  name: 'frontend_ws_connection_seconds',
+  help: 'WebSocket connection time from browser',
+  labelNames: ['namespace'],
+  registers: [registry],
+})
+
+export const frontendJsErrorsTotal = new client.Counter({
+  name: 'frontend_js_errors_total',
+  help: 'JavaScript errors caught in browser',
+  labelNames: ['type'],
+  registers: [registry],
+})
+
 // ---------------------------------------------------------------------------
 // Grafana Cloud Remote Write
 // ---------------------------------------------------------------------------

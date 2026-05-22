@@ -13,7 +13,7 @@ import {
   createHistoryProxy,
 } from './middleware/proxy';
 import { metricsMiddleware } from './middleware/metrics';
-import { registry, startMetricsPush, stopMetricsPush, backendHealthStatus, rateLimitExceededTotal } from './metrics/index';
+import { registry, startMetricsPush, stopMetricsPush, backendHealthStatus, rateLimitExceededTotal, frontendPageLoadSeconds, frontendApiDurationSeconds, frontendWsConnectionTime, frontendJsErrorsTotal } from './metrics/index';
 
 const app = express();
 const server = http.createServer(app);
@@ -145,6 +145,25 @@ app.get('/metrics', async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Frontend E2E metrics endpoint 
+app.post('/metrics/frontend-e2e', express.json(), (req, res) => {
+  const { pageLoads, apiCalls, wsConnections, jsErrors } = req.body
+
+  pageLoads?.forEach(({ metric, value }: any) =>
+    frontendPageLoadSeconds.observe({ metric }, value))
+
+  apiCalls?.forEach(({ method, route, duration }: any) =>
+    frontendApiDurationSeconds.observe({ method, route }, duration))
+
+  wsConnections?.forEach(({ namespace, seconds }: any) =>
+    frontendWsConnectionTime.set({ namespace }, seconds))
+
+  jsErrors?.forEach(({ type }: any) =>
+    frontendJsErrorsTotal.inc({ type }))
+
+  res.json({ ok: true })
+})
 
 // HEALTH CHECKS
 
@@ -302,6 +321,7 @@ server.on('upgrade', (req, socket, head) => {
 
 // SERVER STARTUP
 
+if (process.env.NODE_ENV !== 'test') {
 server.listen(config.port, () => {
   console.info(`
   Gateway http://localhost:${config.port}
@@ -314,6 +334,7 @@ server.listen(config.port, () => {
 `);
   startMetricsPush();
 });
+}
 
 // Graceful shutdown
 
