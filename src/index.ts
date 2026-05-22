@@ -12,6 +12,8 @@ import {
   createSimProxy,
   createHistoryProxy,
 } from './middleware/proxy';
+import { metricsMiddleware } from './middleware/metrics';
+import { registry, startMetricsPush, stopMetricsPush, backendHealthStatus, rateLimitExceededTotal, frontendPageLoadSeconds, frontendApiDurationSeconds, frontendWsConnectionTime, frontendJsErrorsTotal } from './metrics/index';
 
 const app = express();
 const server = http.createServer(app);
@@ -30,8 +32,12 @@ app.use(
   }),
 );
 
+<<<<<<< HEAD
 // Handle preflight requests for all routes
 app.options('*', cors());
+=======
+app.use(metricsMiddleware);
+>>>>>>> a302929e6f6c73ab26c618757732c683fc03e69e
 
 // RATE LIMITING (Per-route configuration)
 
@@ -59,6 +65,7 @@ const apiLimiter: RateLimitRequestHandler = rateLimit({
       ip: req.ip,
       path: req.path,
     });
+    rateLimitExceededTotal.inc({ route: 'api' });
     res.status(429).json({
       error: 'Too many requests',
       message: 'API rate limit exceeded. Please try again later.',
@@ -82,6 +89,7 @@ const chatLimiter: RateLimitRequestHandler = rateLimit({
       ip: req.ip,
       path: req.path,
     });
+    rateLimitExceededTotal.inc({ route: 'chat' });
     res.status(429).json({
       error: 'Too many requests',
       message: 'Chat connection rate limit exceeded. Please reconnect later.',
@@ -104,6 +112,7 @@ const simLimiter: RateLimitRequestHandler = rateLimit({
       ip: req.ip,
       path: req.path,
     });
+    rateLimitExceededTotal.inc({ route: 'sim' });
     res.status(429).json({
       error: 'Too many requests',
       message: 'Simulation rate limit exceeded. Please try again later.',
@@ -133,6 +142,36 @@ app.use('/chat', chatLimiter, chatProxy);
 // SIM route: /sim → Simulation Server (WebSocket, with rate limiting)
 app.use('/sim', simLimiter, simProxy);
 
+// Prometheus metrics endpoint
+app.get('/metrics', async (_req, res) => {
+  try {
+    const metrics = await registry.metrics();
+    res.set('Content-Type', registry.contentType);
+    res.end(metrics);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Frontend E2E metrics endpoint 
+app.post('/metrics/frontend-e2e', express.json(), (req, res) => {
+  const { pageLoads, apiCalls, wsConnections, jsErrors } = req.body
+
+  pageLoads?.forEach(({ metric, value }: any) =>
+    frontendPageLoadSeconds.observe({ metric }, value))
+
+  apiCalls?.forEach(({ method, route, duration }: any) =>
+    frontendApiDurationSeconds.observe({ method, route }, duration))
+
+  wsConnections?.forEach(({ namespace, seconds }: any) =>
+    frontendWsConnectionTime.set({ namespace }, seconds))
+
+  jsErrors?.forEach(({ type }: any) =>
+    frontendJsErrorsTotal.inc({ type }))
+
+  res.json({ ok: true })
+})
+
 // HEALTH CHECKS
 
 const healthStatus = {
@@ -154,8 +193,11 @@ const checkBackendHealth = async (): Promise<string> => {
     });
     clearTimeout(timeout);
 
-    return response.ok ? 'ok' : 'error';
+    const status = response.ok ? 'ok' : 'error';
+    backendHealthStatus.set({ service: 'backend' }, status === 'ok' ? 1 : 0);
+    return status;
   } catch {
+    backendHealthStatus.set({ service: 'backend' }, 0);
     return 'unavailable';
   }
 };
@@ -170,8 +212,11 @@ const checkSimulationHealth = async (): Promise<string> => {
     });
     clearTimeout(timeout);
 
-    return response.ok ? 'ok' : 'error';
+    const status = response.ok ? 'ok' : 'error';
+    backendHealthStatus.set({ service: 'simulation' }, status === 'ok' ? 1 : 0);
+    return status;
   } catch {
+    backendHealthStatus.set({ service: 'simulation' }, 0);
     return 'unavailable';
   }
 };
@@ -186,8 +231,11 @@ const checkChatHealth = async (): Promise<string> => {
     });
     clearTimeout(timeout);
 
-    return response.ok ? 'ok' : 'error';
+    const status = response.ok ? 'ok' : 'error';
+    backendHealthStatus.set({ service: 'chat' }, status === 'ok' ? 1 : 0);
+    return status;
   } catch {
+    backendHealthStatus.set({ service: 'chat' }, 0);
     return 'unavailable';
   }
 };
@@ -202,8 +250,11 @@ const checkHistoryHealth = async (): Promise<string> => {
     });
     clearTimeout(timeout);
 
-    return response.ok ? 'ok' : 'error';
+    const status = response.ok ? 'ok' : 'error';
+    backendHealthStatus.set({ service: 'history' }, status === 'ok' ? 1 : 0);
+    return status;
   } catch {
+    backendHealthStatus.set({ service: 'history' }, 0);
     return 'unavailable';
   }
 };
@@ -277,6 +328,7 @@ server.on('upgrade', (req, socket, head) => {
 
 // SERVER STARTUP
 
+if (process.env.NODE_ENV !== 'test') {
 server.listen(config.port, () => {
   console.info(`
   Gateway http://localhost:${config.port}
@@ -287,17 +339,20 @@ server.listen(config.port, () => {
   CORS Origin: ${config.allowedOrigin}
   Health Check: http://localhost:${config.port}/health
 `);
+  startMetricsPush();
 });
+}
 
 // Graceful shutdown
 
-process.on('SIGTERM', () => {
-  console.info('SIGTERM signal received: closing HTTP server');
+const shutdown = (signal: string) => {
+  console.info(`${signal} received: closing HTTP server`);
+  stopMetricsPush();
   server.close(() => {
     console.info('HTTP server closed');
     process.exit(0);
   });
-});
+};
 
 process.on('SIGINT', () => {
   console.info('SIGINT signal received: closing HTTP server');
@@ -309,6 +364,8 @@ process.on('SIGINT', () => {
 
 // Export functions for testing
 export {
+  app,
+  server,
   checkBackendHealth,
   checkSimulationHealth,
   checkChatHealth,
@@ -316,7 +373,7 @@ export {
   SKIP_SOCKET_IO,
   apiLimiter,
   chatLimiter,
-  simLimiter
+  simLimiter,
 };
 
 process.on('SIGINT', () => {

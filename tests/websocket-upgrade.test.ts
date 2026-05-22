@@ -1,6 +1,5 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import http from 'node:http';
-import { config } from '../src/config/config';
 
 describe('Gateway WebSocket Upgrade Handling', () => {
   let mockReq: any;
