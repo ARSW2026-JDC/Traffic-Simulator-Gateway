@@ -191,6 +191,7 @@ export function createApiProxy() {
     ...baseProxyOptions,
     target: config.backendUrl,
     agent: getAgent(config.backendUrl, 'API'),
+    pathRewrite: { '^/api': '' },
     timeout: 60_000,
     proxyTimeout: 60_000,
     on: {
